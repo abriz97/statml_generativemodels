@@ -1,10 +1,15 @@
 \documentclass{article}
 
 \usepackage{fancyhdr}
-\usepackage{amsmath}
+\usepackage{amsmath, amsfonts}
 \usepackage{tocloft}
 \usepackage{csquotes}
 \usepackage{xcolor}
+\usepackage{url}
+\usepackage{cleveref}
+\usepackage{mathtools}
+
+\DeclarePairedDelimiter{\norm}{\lVert}{\rVert}
 
 \fancyhf{}
 \setlength{\headheight}{24pt}
@@ -24,16 +29,235 @@
   \newpage
   \pagenumbering{arabic}
 
+  Notes at \url{akyildiz.me/teaching/cdt/notes/Lecture-1.pdf}.
+
   \section{Monday 22 April 2024: Imperial}
 
-  Hello world!
-  \textcolor{red}{Hello}
-  How is everyone doing?
-  \textquote{somehtin}
+  Today: MCMC sampling and Energy based models? \\
 
-  \subsection{Introduction}
+  \subsection{Recap}
 
-  \subsection{Something else}
+  Take home: \textit{when we don't really know which distribution we are targeting, we can trade off computational cost for accuracy.}
+
+
+  \subsubsection{Sampling problem} 
+  Target distribution $\pi(x) = \frac{\Pi(x)}{Z}$ where $Z$ is unknown.
+  \\
+  \textit{
+  What's the difference between sampling and generative modelling?} 
+      In sampling, we have a target distribution, in generative modelling we want to generate samples but we don't have the target available.  
+      First need to get information on the object and then run the sampler.
+      Want something such that $X_1, X_2, \dots, X_n \xrightarrow \infty X_{\infty} \sim \pi$.
+
+    \subsubsection{Metropolis-Hastings}
+
+    Propose and accept as a function of acceptance ratio $\alpha$.
+    \begin{itemize}
+        \item Propose $X' \sim q(\cdot | X_{n-1})$.
+        \item $\alpha(X', X_{n-1}) = \min \left( 1, \frac{\Pi(X')q(X_{n-1}|X')}{\Pi(X_{n-1})q(X'|X_{n-1})} \right).$
+    \end{itemize}
+    The problem with MH is the choice of proposal and dealing with correlations.
+
+    \subsubsection{Metropolis adjusted Langevin}
+
+    \begin{equation} \label{eq:mala}
+      X' = X_{n-1} + \gamma \nabla \log \Pi(X_{n-1}) + \sqrt{2\gamma} Z,
+    \end{equation}
+    we can also write $U = \log \Pi$.
+    \\
+    In super-high dimensional problems computing $\alpha$ is hard and it may just be close to 0 most of the times.
+    As such, in machine learning, \textbf{unadjusted LA (ULA)}:
+    \begin{equation} \label{eq:ula}
+        X_n = X_{n-1} - \gamma \nabla U(X_{n-1}) + \sqrt{2\gamma} Z
+    \end{equation}
+    which targets $\pi_\gamma$.
+    Note that this is a discretisation of a stochastic differential equation:
+    \begin{equation} \label{eq:sde}
+        dX_t = -\nabla U(X_t) dt + \sqrt{2} dB_t.
+    \end{equation}
+    \textit{why is this a good proposal?} The stationary measure of the SDE is the target distribution: $\pi(x) \propto \exp{U(x)}$.
+
+    We can also prove that the \textquote{distance} between the discretisation and the SDE is low?
+    \begin{equation} \label{eq:}
+        W_2(\pi_{\gamma_n}, \pi_n^\gamma) \leq O(\gamma^{\frac{1}{2}})
+    \end{equation}
+    can control the error by the square root of the step size $\gamma$.
+    Further, 
+    \begin{equation} \label{eq:}
+        W_2(\pi_{\gamma_n}, \pi) \leq e^{-\mu\gamma_n} \left( \frac{1}{\sqrt{(n)} + \norm{x-x^n}} \right).
+    \end{equation}
+    (The correct result is in the slides. from Durmus and Moulines)
+
+    \subsubsection{Annehaling}
+
+    Start by looking at the modification of~\cref{eq:sde}, where we change the noise term and instead write:
+    \begin{equation} \label{eq:}
+        dX_t = -\nabla U(X_t) dt + \sqrt{\frac{2}{\beta}} dB_t,
+    \end{equation}
+    where the SDE has a new stationary measure:
+    \begin{equation} \label{eq:}
+        \pi_\beta(x) \propto \exp(-\beta U(x)).
+    \end{equation}
+    and the stationary meausre concentrates on the minima of $E$? as $\beta \rightarrow \infty$.
+    
+    As such, $\beta$ controls the \textquote{peakiness} of the distribution (e.\,g.\ \textit{simulated annehaling}).
+
+    \subsection{Enery Based Models and Variational Autoencoders}
+
+    \begin{itemize}
+        \item[\textit{mem vs gen}] difference between $\hat p_\text{data} = \frac{1}{n} \sum_{i=1}^{n} \delta_{x_i}$ and $p_\text{data}$.
+        \item[\textit{pot en}] $\pi(x) = \exp(-U(x))$
+    \end{itemize}
+
+    \subsection{Energy Based Models}
+
+    We would like to estimate $p_\text{data}$ from $\hat{p}_\text{data}$: classical density estimation problem \textbf{but} very high dimensions(so e.\,g.\ kernel doesn't work).
+\\
+    What would be a sensible parametric model for $p_\text{data}$?
+    Neural networks make sense to approximate continuous functions, so for example write ($U_{\theta}(x)$). (rationale: universal approximators theorem guarantees there exists a  NN which can approximate a continuous function arbitrarily well).
+
+    Let $U \colon X \to \mathbf{R}$ and $U_{\theta}$ be a NN. Then:
+    \begin{equation} \label{eq:}
+        \norm{\pi - \pi_{\theta}}_{TV} \leq \frac{m(X)}{2}\norm{U - U_{\theta}}.
+    \end{equation}
+    So EBM are universal approximators on bounded spaces. (Atchade 2023).
+    \textbf{Training EBM} is hard and there is a VAST literature.
+    We review MLE and Score matching and variations of these
+
+    \subsection{Maximum Likelihood Estimation}
+    Want to maximise the expected likelihood of the data under the model. The \textit{expected} log-likelihood of the data is given by:
+    \begin{equation} \label{eq:}
+      l(\theta) := \mathbf{E}_{x \sim p_\text{data}} \left[ \log p_{\theta}(x) \right].
+    \end{equation}
+    Maximising this is equivalent to minimising the KL divergence between the model and the data distribution.
+
+    \textit{if the data are diracs, the KL is not defined.}
+
+    If we expand, we get:
+    \begin{equation} \label{eq:}
+      l(\theta) = \int \log \pi_\theta(x) p_\text{data}(x) dx = \dots
+    \end{equation}
+    depends on an integral we can't compute \ldots
+
+    Assuming we can use Fubini:
+    \begin{equation} \label{eq:}
+      \nabla_\theta \log Z_\theta = - \mathbf{E}_{x \sim p_\theta} \left[ \nabla_\theta U_\theta(x) \right].
+    \end{equation}
+    This is easy to prove through derivative of log, swap integral and recognize pdf.
+    Thus:
+    \begin{equation} \label{eq:}
+      \nabla_\theta l(\theta) = \mathbf{E}_{x \sim p_\text{data}} \left[ \nabla_\theta U_\theta(x) \right] - \mathbf{E}_{x \sim p_\theta} \left[ \nabla_\theta U_\theta(x) \right],
+    \end{equation}
+    where the first term can be \textquote{filled in} with the empirical data.
+
+    The idea is to use MCMC to sample from $\pi_\theta$ to approximate the second term.
+    At iteration $k$ the expectation needs to be approximated. For this, we run a separate ULA chain at each $k$.
+    General algorithms on the slides which use stochastic gradients.
+
+    Cases: \textit{CD-1}, \textit{PCD} (persistent Contrastive Divergence), \textit{Short-Run MCMC} (Nijkamp et al. 2019).
+    \\
+    \textbf{Exercise:} Understand the differences between these models.
+
+    \subsection{Latent variables EBMs and MLE.}
+
+    \textit{Until now, we haven't used any latent variables}
+    Let $p_\theta(x,z)$ be a probabilistic model with parameters $\theta$, data x and latent variables $z$.
+
+    Given the data $x$, the typical goal is to build MLE of the parameters $\theta$ by maximising the marginal likelihood:
+    \begin{equation} \label{eq:}
+      \theta \in \text{arg max}_\theta \log p_\theta(x).
+    \end{equation}
+
+    So the difference with the previous case is that we have to marginalise over the latent variables, and so we are maximising over an integral as well.
+
+    In literature for LVMs, the standard approach is the EM algorithm:
+    \begin{itemize}
+        \item E-step: computing an expectation $Q(\theta, \theta_n) = \mathbf{E}_{p_{\theta_n}(z|x)} \left[ \log p_\theta(x,z) \right]$.
+        \item M-step: maximising the expectation.
+    \end{itemize}
+    To compute E-Step, we would run ULA for a pre-determined number of steps.
+    We can use \textit{Fisher's identity}:
+    \begin{equation} \label{eq:}
+      \nabla_\theta \log p_\theta(x) = \mathbf{E}_{p_{\theta_n}(z|x)} \left[ \nabla_\theta \log p_\theta(x,z) \right].
+    \end{equation}
+    (same as before but with \textquote{log-trick} in reverse).
+
+    \textit{SOUL} method \ldots 
+
+    e.\,g.\ Consider the latent variable EBM model:
+    \begin{equation} \label{eq:}
+      p_\theta(x, z) = p_\beta(x|z) p_\alpha(z),
+    \end{equation}
+    where
+    \begin{equation} \label{eq:}
+        p_\alpha(z) = \frac{e^{U_\alpha(z)} p_0(z)}{Z_\alpha}.
+    \end{equation}
+    
+    \textit{Can you derive MLE training algorithm for this model?}
+
+    So what is the intuition here? 
+    If we use Fisher's identity, what do we get?
+
+    \begin{align} \label{eq:}
+        \nabla_\theta \log p_\theta(x) &= \mathbf{E}_{p_{\theta_n}(z|x)} \left[ \nabla_\theta \log p_\theta(x,z) \right] \\
+                                       &= \mathbf{E}_{p_\theta(z|x)}[\nabla \log p_\theta(x|z) + \nabla \log p_\alpha(z)] \\
+                                       &= \mathbf{E}_{p_\theta(z|x)}[\nabla \log p_\theta(x|z) + \nabla U_\alpha(z)]  - \nabla \log Z_\alpha \\
+                                       &= \mathbf{E}_{p_\theta(z|x)}[\nabla \log p_\theta(x|z) + \nabla U_\alpha(z)]  - \mathbf{E}_{p_\alpha(z)}[\nabla U_\alpha(z)].
+    \end{align}
+    
+    Now we have to compute two expectations and we will set up two MCMC schemes to approximate these.
+    \textcolor{red}{My problem was understanding what we can compute and what we cannot. When we don't know, use trick to translate into something estimable}
+
+    \emph{Solution:}
+    \begin{itemize}
+        \item Learning EBM prior via short-run MCMC. 
+        \item \textbf{Mini-batch} Sample observed examples ${x_i}_{i=1}^m$.
+        \item \textbf{Prior sampling} \ldots
+    \end{itemize}
+    \textcolor{red}{aaaaa}
+
+    \subsection{Score Matching}
+
+    \begin{itemize}
+        \item \textit{Idea that made diffusion models work}.
+        \item The idea is to minimise the difference between the score of the model and the score of the data.
+        \item Similarity: MLE minimises KL divergence, while score matching minimises Fisher divergence.
+    \end{itemize}
+
+    Recall ULA(\cref{eq:ula}): notice we only need the gradient of the (unnormalised) log density for sampling: $\nabla \log \Pi(X_t^\gamma)$.
+
+    Score matching methods are based on Fisher divergence: differences in grad-logs:
+    \begin{equation} \label{eq:}
+        F(\pi_1 || \pi_2) = \frac{1}{2} \mathbf{E}_{\pi_1} [||\nabla \log \pi_1 - \nabla \log \pi_2||^2]. 
+    \end{equation}
+    We are interested in computing $\theta$ where:
+    \begin{equation} \label{eq:}
+      \theta \in \text{arg min}_\theta F(\pi_{\text{data}}|| \pi_{\theta} ).
+    \end{equation}
+    but again, we do not know $\pi_{\text{data}}$ and we do not know the grad-log.
+    However, we can rewrite:
+    \begin{equation} \label{eq:}
+        F(\pi_{\text{data}}|| \pi_{\theta} ) = \mathbf{E}_{p_\text{data}} \left[ \text{Tr} \nabla^2 \log \pi_\theta(X) + \frac{1}{2} \norm{\nabla \log \pi_\theta(X)}^2 \right].
+    \end{equation}
+    \textit{This means we don't need to know $p_\text{data}$ to compute the Fisher divergence.}
+    \\
+    \textcolor{green}{Proof comes from expansion, realising one term=0, log-trick, integration by part, }
+
+    What you are estimating as a score is a vector field that points towards the \textquote{mass} of the data. Image from Murphy: 2d samples from score-matching. 
+
+    Mentioned one problem with score-matching not dealing well with parts where you don't see data. $\rightarrow$ you are not going to estimate well the proportions between two modes.
+
+    Possible solutions:
+    \begin{itemize}
+        \item Noise your data. $p^\sigma_\text{data}(x) = \int p_\text{data}(x) \cdot \dots$.
+    \end{itemize}
+
+    Noising implies perturbing densities such as they have better properties (\textquote{no 0 density areas between pdfs}).
+    There is a version of noising score matching \ldots
+
+    The key discovery here is that there will be a way of noising the data which will lend itself to going \textquote{the other way} and denoising noised distributions.
+
+    \subsection{Variational Autoencoders}
 
   \newpage
 
